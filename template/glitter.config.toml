@@ -1,0 +1,21 @@
+
+[app]
+  api_server_addr = ":26659"
+  index_mode = "{{.IndexMode}}"
+  log_level = "info"
+  log_path = "$HOME/.glitter/app.log"
+  public_log_path = "$HOME/.glitter/public.log"
+
+[es]
+  enable_gzip = false
+  hosts = ["127.0.0.1:9200"]
+  retry_interval = 0
+  retry_times = 0
+  show_info_log = false
+  show_trace_log = false
+  time_out = 0
+
+[tendermint]
+  app_addr = "tcp://0.0.0.0:26658"
+  app_transport = "grpc"
+  tendermint_addr = "http://0.0.0.0:26657"
