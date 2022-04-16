@@ -1,5 +1,5 @@
 .PHONY: build
 build:
-	cd cmd && \
-	go build -o ../glitter-boot &&\
+	cd cmd/glitter-boot && \
+	go build -o ../../build/glitter-boot &&\
 	cd -

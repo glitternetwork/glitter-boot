@@ -4,6 +4,7 @@
   index_mode = "{{.IndexMode}}"
   log_level = "info"
   log_path = "$HOME/.glitter/app.log"
+  db_path = "$HOME/.glitter"
   public_log_path = "$HOME/.glitter/public.log"
 
 [es]

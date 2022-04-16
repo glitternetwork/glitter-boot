@@ -19,6 +19,14 @@ func systemctl(args ...string) error {
 	return exec.Command("systemctl", args...).Run()
 }
 
+func systemctlOut(args ...string) (string, error) {
+	o, err := exec.Command("systemctl", args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(o), nil
+}
+
 // ==== util funcs ====
 
 type CopyFileDesc struct {
