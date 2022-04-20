@@ -3,9 +3,9 @@
   api_server_addr = ":26659"
   index_mode = "{{.IndexMode}}"
   log_level = "info"
-  log_path = "$HOME/.glitter/app.log"
-  db_path = "$HOME/.glitter"
-  public_log_path = "$HOME/.glitter/public.log"
+  log_path = "/usr/local/glitter/glitter/app.log"
+  db_path = "/usr/local/glitter/glitter"
+  public_log_path = "/usr/local/glitter/glitter/public.log"
 
 [es]
   enable_gzip = false

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 
 	tmjson "github.com/tendermint/tendermint/libs/json"
@@ -81,4 +82,26 @@ func pathJoin(elem ...string) string {
 		expands[i] = os.ExpandEnv(s)
 	}
 	return filepath.Join(expands...)
+}
+
+func chown(path string, user, group string, recursion bool) error {
+	var args []string
+	if recursion {
+		args = append(args, "-R")
+	}
+	args = append(args, fmt.Sprintf("%s:%s", user, group))
+	args = append(args, path)
+	return exec.Command("chown", args...).Run()
+}
+
+func checkUserGroup(u, grp string) error {
+	_, err := user.Lookup(u)
+	if err != nil {
+		return err
+	}
+	_, err = user.LookupGroup(grp)
+	if err != nil {
+		return err
+	}
+	return nil
 }

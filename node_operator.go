@@ -28,8 +28,11 @@ type NodeOpsArgs struct {
 }
 
 var (
-	workdir  = os.ExpandEnv("$HOME/.glitter-boot")
-	storedir = filepath.Join(workdir, "store.json")
+	installdir   = "/usr/local/glitter"
+	bootdir      = filepath.Join(installdir, "glitter-boot")
+	storedir     = filepath.Join(bootdir, "store.json")
+	glitterUser  = "glitter"
+	glitterGroup = "glitter"
 )
 
 const (
@@ -71,7 +74,7 @@ func initNode(ctx context.Context, args NodeOpsArgs) {
 	p := &nodeOpsPipe{}
 	p.
 		Do("Prepare", func(ctx *setupNodeCtx) error {
-			ctx.WorkDir = workdir
+			ctx.WorkDir = bootdir
 			ctx.StoreDir = storedir
 			ctx.Moniker = args.Moniker
 			ctx.IndexMode = args.IndexMode
@@ -80,6 +83,12 @@ func initNode(ctx context.Context, args NodeOpsArgs) {
 			ctx.TendermintBinaryURL = args.TendermintBinaryURL
 
 			var err error
+			err = checkUserGroup(glitterUser, glitterGroup)
+
+			if err != nil {
+				return errors.Errorf("failed to got glitter user/group: %v", err)
+			}
+
 			ctx.store, err = newFileStore(storedir, true)
 			if err != nil {
 				return err
@@ -105,7 +114,7 @@ func initNode(ctx context.Context, args NodeOpsArgs) {
 			ctx.OldClusterTendermintRPCURL = "http://" + net.JoinHostPort(selectedSeed.Host, "26657")
 			ctx.OldClusterGlitterURL = "http://" + net.JoinHostPort(selectedSeed.Host, "26659")
 			ctx.LocalTendermintRPCURL = "http://127.0.0.1:26657"
-			os.Mkdir(workdir, 0755)
+			os.MkdirAll(bootdir, 0755)
 			c, err := NewTMClient(ctx.OldClusterTendermintRPCURL)
 			ctx.assert(err)
 
@@ -150,7 +159,7 @@ func startFullNode(ctx context.Context, args NodeOpsArgs) {
 	p := &nodeOpsPipe{}
 	p.
 		Do("Check", func(ctx *setupNodeCtx) error {
-			ctx.WorkDir = workdir
+			ctx.WorkDir = bootdir
 			var err error
 			ctx.store, err = newFileStore(storedir, true)
 			if err != nil {
@@ -182,7 +191,7 @@ func startValidator(ctx context.Context, args NodeOpsArgs) {
 	p := &nodeOpsPipe{}
 	p.
 		Do("Prepare", func(ctx *setupNodeCtx) error {
-			ctx.WorkDir = workdir
+			ctx.WorkDir = bootdir
 			ctx.StoreDir = storedir
 
 			var err error
@@ -225,7 +234,7 @@ func stopNode(ctx context.Context, args NodeOpsArgs) {
 	p := &nodeOpsPipe{}
 	p.
 		Do("Check", func(ctx *setupNodeCtx) error {
-			ctx.WorkDir = workdir
+			ctx.WorkDir = bootdir
 			ctx.StoreDir = storedir
 
 			var err error
@@ -261,7 +270,7 @@ func showNodeInfo(ctx context.Context, args NodeOpsArgs) {
 	p := &nodeOpsPipe{}
 	p.
 		Do("Check", func(ctx *setupNodeCtx) error {
-			ctx.WorkDir = workdir
+			ctx.WorkDir = bootdir
 			ctx.StoreDir = storedir
 
 			var err error
@@ -287,7 +296,9 @@ Tendermint Status: %s
 Glitter	   Status: %s
 
 PrivateKeyFile:	~/.glitter-boot/priv_validator_key.json
-GlitterBootDir:	~/.glitter-boot
+GlitterBootDir:	/usr/local/glitter/glitter-boot
+GlitterDir:		/usr/local/glitter/glitter
+
 `
 			get := func(key string) string {
 				value, err := ctx.store.Get(key)
@@ -315,38 +326,38 @@ GlitterBootDir:	~/.glitter-boot
 }
 
 func stepDownloadTendermint(ctx *setupNodeCtx) error {
-	return downloadFile(pathJoin(workdir, "tendermint"), ctx.TendermintBinaryURL)
+	return downloadFile(pathJoin(bootdir, "tendermint"), ctx.TendermintBinaryURL)
 }
 
 func stepDownloadGlitter(ctx *setupNodeCtx) error {
-	return downloadFile(pathJoin(workdir, "glitter"), ctx.GlitterBinaryURL)
+	return downloadFile(pathJoin(bootdir, "glitter"), ctx.GlitterBinaryURL)
 }
 
 func stepDownloadGenesis(ctx *setupNodeCtx) error {
 	g, err := ctx.tmClusterClient.Genesis(context.TODO())
 	ctx.assert(err)
-	return jsonToFile(g.Genesis, pathJoin(workdir, "genesis.json"))
+	return jsonToFile(g.Genesis, pathJoin(bootdir, "genesis.json"))
 }
 
 func stepRenderGlitterConfig(ctx *setupNodeCtx) error {
 	if ctx.IndexMode != "kv" && ctx.IndexMode != "es" {
 		return errors.Errorf("invalid glitter index mode: %s", ctx.IndexMode)
 	}
-	return renderGlitterConfig(pathJoin(workdir, "glitter.config.toml"),
+	return renderGlitterConfig(pathJoin(bootdir, "glitter.config.toml"),
 		map[string]interface{}{
 			"IndexMode": ctx.IndexMode,
 		})
 }
 
 func stepRenderTendermintConfig(ctx *setupNodeCtx) error {
-	err := renderTendermintConfig(pathJoin(workdir, "tendermint-full.config.toml"),
+	err := renderTendermintConfig(pathJoin(bootdir, "tendermint-full.config.toml"),
 		map[string]interface{}{
 			"Moniker": ctx.Moniker,
 			"Seeds":   ctx.SeedsStr,
 			"Mode":    "full",
 		})
 	ctx.assert(err)
-	return renderTendermintConfig(pathJoin(workdir, "tendermint-validator.config.toml"),
+	return renderTendermintConfig(pathJoin(bootdir, "tendermint-validator.config.toml"),
 		map[string]interface{}{
 			"Moniker": ctx.Moniker,
 			"Seeds":   ctx.SeedsStr,
@@ -355,9 +366,9 @@ func stepRenderTendermintConfig(ctx *setupNodeCtx) error {
 }
 
 func stepRenderSystemctlConfig(ctx *setupNodeCtx) error {
-	err := ioutil.WriteFile(pathJoin(workdir, "tendermint.service"), tendermintServiceFile, 0644)
+	err := ioutil.WriteFile(pathJoin(bootdir, "tendermint.service"), tendermintServiceFile, 0644)
 	ctx.assert(err)
-	return ioutil.WriteFile(pathJoin(workdir, "glitter.service"), glitterServiceFile, 0644)
+	return ioutil.WriteFile(pathJoin(bootdir, "glitter.service"), glitterServiceFile, 0644)
 }
 
 func stepGenerateNodeKeyFile(ctx *setupNodeCtx) error {
@@ -416,12 +427,12 @@ func stepResetCopyFile(ctx *setupNodeCtx) error {
 	systemctl("stop", "tendermint")
 	systemctl("stop", "glitter")
 
-	os.RemoveAll(pathJoin("$HOME/.tendermint"))
-	os.RemoveAll(pathJoin("$HOME/.glitter"))
+	os.RemoveAll(pathJoin(installdir, "tendermint"))
+	os.RemoveAll(pathJoin(installdir, "glitter"))
 	os.RemoveAll(pathJoin("/tmp/kvstore"))
-	os.MkdirAll(pathJoin("$HOME/.tendermint/config"), 0755)
-	os.MkdirAll(pathJoin("$HOME/.tendermint/data"), 0755)
-	os.MkdirAll(pathJoin("$HOME/.glitter"), 0755)
+	os.MkdirAll(pathJoin(installdir, "tendermint/config"), 0755)
+	os.MkdirAll(pathJoin(installdir, "tendermint/data"), 0755)
+	os.MkdirAll(pathJoin(installdir, "glitter"), 0755)
 
 	tmConfigSrcPath := pathJoin(ctx.WorkDir, "tendermint-full.config.toml")
 	genesisSrcPath := pathJoin(ctx.WorkDir, "genesis.json")
@@ -437,12 +448,12 @@ func stepResetCopyFile(ctx *setupNodeCtx) error {
 	tmBinSrcPath := pathJoin(ctx.WorkDir, "tendermint")
 
 	copys := []CopyFileDesc{
-		{tmConfigSrcPath, pathJoin("$HOME/.tendermint/config", "config.toml")},
-		{genesisSrcPath, pathJoin("$HOME/.tendermint/config", "genesis.json")},
-		{nodeKeySrcPath, pathJoin("$HOME/.tendermint/config", "node_key.json")},
-		{validatorKeySrcPath, pathJoin("$HOME/.tendermint/config", "priv_validator_key.json")},
-		{validatorStateSrcPath, pathJoin("$HOME/.tendermint/data", "priv_validator_state.json")},
-		{glitterConfigSrcPath, pathJoin("$HOME/.glitter", "config.toml")},
+		{tmConfigSrcPath, pathJoin(installdir, "tendermint/config", "config.toml")},
+		{genesisSrcPath, pathJoin(installdir, "tendermint/config", "genesis.json")},
+		{nodeKeySrcPath, pathJoin(installdir, "tendermint/config", "node_key.json")},
+		{validatorKeySrcPath, pathJoin(installdir, "tendermint/config", "priv_validator_key.json")},
+		{validatorStateSrcPath, pathJoin(installdir, "tendermint/data", "priv_validator_state.json")},
+		{glitterConfigSrcPath, pathJoin(installdir, "glitter", "config.toml")},
 		{glitterServiceSrcPath, "/etc/systemd/system/glitter.service"},
 		{tmServiceSrcPath, "/etc/systemd/system/tendermint.service"},
 		{glitterBinSrcPath, "/usr/bin/glitter"},
@@ -456,12 +467,22 @@ func stepResetCopyFile(ctx *setupNodeCtx) error {
 	}
 	os.Chmod("/usr/bin/glitter", 0755)
 	os.Chmod("/usr/bin/tendermint", 0755)
+
+	err := chown(installdir, glitterUser, glitterGroup, true)
+	ctx.assert(err)
+
+	err = chown("/usr/bin/glitter", glitterUser, glitterGroup, true)
+	ctx.assert(err)
+
+	err = chown("/usr/bin/tendermint", glitterUser, glitterGroup, true)
+	ctx.assert(err)
+
 	return systemctl("daemon-reload")
 }
 
 func stepSwitchToFullNode(ctx *setupNodeCtx) error {
 	tmConfigSrcPath := pathJoin(ctx.WorkDir, "tendermint-full.config.toml")
-	err := copyFile(CopyFileDesc{tmConfigSrcPath, pathJoin("$HOME/.tendermint/config", "config.toml")})
+	err := copyFile(CopyFileDesc{tmConfigSrcPath, pathJoin(installdir, "tendermint/config", "config.toml")})
 	ctx.assert(err)
 
 	return systemctl("restart", "tendermint")
@@ -469,7 +490,7 @@ func stepSwitchToFullNode(ctx *setupNodeCtx) error {
 
 func stepSwitchToValidator(ctx *setupNodeCtx) error {
 	tmConfigSrcPath := pathJoin(ctx.WorkDir, "tendermint-validator.config.toml")
-	err := copyFile(CopyFileDesc{tmConfigSrcPath, pathJoin("$HOME/.tendermint/config", "config.toml")})
+	err := copyFile(CopyFileDesc{tmConfigSrcPath, pathJoin(installdir, "tendermint/config", "config.toml")})
 	ctx.assert(err)
 
 	return systemctl("restart", "tendermint")
@@ -528,6 +549,9 @@ type setupNodeCtx struct {
 
 	ValidatorAddress string
 	ValidatorPubKey  crypto.PubKey
+
+	UID int
+	GID int
 
 	store           store
 	tmClusterClient *TendermintClient

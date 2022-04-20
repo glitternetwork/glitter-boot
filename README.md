@@ -33,6 +33,8 @@ Use "glitter-boot [command] --help" for more information about a command.
 ### init
 Download glitter binary and init services
 
+> Before executing this command, you need to create the `glitter` user and user group
+
 - Argumets
 
 |Name|Description|Required|Default|
